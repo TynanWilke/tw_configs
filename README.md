@@ -31,14 +31,14 @@ Personal configuration files for bash, tmux, and neovim with a one-command insta
 ### One-Line Install (via curl)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TynanWilke/bash_configs/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TynanWilke/tw_configs/main/install.sh | bash
 ```
 
 ### Manual Installation
 
 ```bash
-git clone https://github.com/TynanWilke/bash_configs.git
-cd bash_configs
+git clone https://github.com/TynanWilke/tw_configs.git
+cd tw_configs
 chmod +x install.sh
 ./install.sh
 ```
