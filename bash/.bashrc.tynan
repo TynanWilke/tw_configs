@@ -66,6 +66,7 @@ export IGNOREEOF=3
 
 # Allow bin dir in home
 export PATH=~/bin:$PATH
+export PATH=~/.local/bin:$PATH
 
 cd_git_root() {
   # Check if the current directory is part of a Git repository
