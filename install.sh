@@ -222,9 +222,6 @@ install_neovim_from_release() {
     # Clean up
     rm -rf "$temp_dir"
 
-    # Update PATH for current session
-    export PATH="$HOME/bin:$PATH"
-
     # Verify installation
     if "$HOME/bin/nvim" --version &> /dev/null; then
         local new_version=$("$HOME/bin/nvim" --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
@@ -414,7 +411,6 @@ install_opencode() {
     log_info "Installing opencode..."
     curl -fsSL https://opencode.ai/install | bash
 
-    export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
     if command -v opencode &>/dev/null; then
         log_info "opencode installed successfully"
     else
@@ -431,7 +427,6 @@ install_claude() {
     log_info "Installing Claude CLI..."
     curl -fsSL https://claude.ai/install.sh | bash
 
-    export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
     if command -v claude &>/dev/null; then
         log_info "Claude CLI installed successfully"
     else
@@ -441,6 +436,8 @@ install_claude() {
 
 # Main installation process
 main() {
+    export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+
     log_info "Starting dotfiles installation..."
     echo ""
 
