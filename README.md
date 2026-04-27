@@ -1,6 +1,6 @@
 # Tynan's Dotfiles
 
-Personal configuration files for bash, tmux, and neovim with a one-command installation script.
+Personal configuration files for bash, tmux, neovim, opencode, and claude with a one-command installation script.
 
 ## Features
 
@@ -28,7 +28,25 @@ Personal configuration files for bash, tmux, and neovim with a one-command insta
 
 ## Quick Installation
 
-### One-Line Install (via curl)
+### Linux: Create User First
+
+If setting up a fresh Linux machine, create your user before installing dotfiles:
+
+```bash
+# As root or with sudo, create the user (default: tw)
+curl -fsSL https://raw.githubusercontent.com/TynanWilke/tw_configs/main/setup_user.sh | bash
+
+# Or specify a custom username
+DOTFILES_USER=myuser curl -fsSL https://raw.githubusercontent.com/TynanWilke/tw_configs/main/setup_user.sh | bash
+```
+
+Then log in as that user and run the dotfiles install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TynanWilke/tw_configs/main/install.sh | bash
+```
+
+### macOS / Existing Linux User
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TynanWilke/tw_configs/main/install.sh | bash
