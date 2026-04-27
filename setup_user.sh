@@ -60,7 +60,7 @@ else
         sudo usermod -s /bin/bash "$DOTFILES_USER"
     fi
 
-    local home_dir=$(eval echo "~$DOTFILES_USER")
+    home_dir=$(eval echo "~$DOTFILES_USER")
     if [ ! -d "$home_dir" ]; then
         sudo mkdir -p "$home_dir"
         sudo chown "$DOTFILES_USER:$DOTFILES_USER" "$home_dir"
@@ -75,7 +75,7 @@ else
 fi
 
 if prompt_yes_no "Set up passwordless sudo for user '$DOTFILES_USER'?"; then
-    local sudoers_file="/etc/sudoers.d/$DOTFILES_USER"
+    sudoers_file="/etc/sudoers.d/$DOTFILES_USER"
     echo "$DOTFILES_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee "$sudoers_file" >/dev/null
     sudo chmod 440 "$sudoers_file"
     if sudo visudo -c -f "$sudoers_file" &>/dev/null; then
