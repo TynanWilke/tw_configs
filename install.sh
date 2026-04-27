@@ -414,47 +414,10 @@ install_opencode() {
     fi
 
     log_info "Installing opencode..."
+    curl -fsSL https://opencode.ai/install | bash
 
-    local temp_dir="/tmp/opencode-install-$$"
-    mkdir -p "$temp_dir"
-
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if [[ $(uname -m) == "aarch64" || $(uname -m) == "arm64" ]]; then
-            local arch="arm64"
-        else
-            local arch="amd64"
-        fi
-        local download_url="https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${arch}.tar.gz"
-        curl -L "$download_url" -o "$temp_dir/opencode.tar.gz" || {
-            log_error "Failed to download opencode"
-            rm -rf "$temp_dir"
-            return 1
-        }
-        tar -xzf "$temp_dir/opencode.tar.gz" -C "$temp_dir" || {
-            log_error "Failed to extract opencode"
-            rm -rf "$temp_dir"
-            return 1
-        }
-        mkdir -p "$HOME/bin"
-        cp "$temp_dir/opencode" "$HOME/bin/opencode" && chmod +x "$HOME/bin/opencode"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        if command -v brew &>/dev/null; then
-            brew install opencode
-        else
-            log_error "Homebrew not found. Cannot install opencode on macOS without Homebrew."
-            rm -rf "$temp_dir"
-            return 1
-        fi
-    else
-        log_warn "Unsupported OS for automatic opencode installation. Install manually from https://github.com/anomalyco/opencode"
-        rm -rf "$temp_dir"
-        return 0
-    fi
-
-    rm -rf "$temp_dir"
-
-    if command -v opencode &>/dev/null || [ -x "$HOME/bin/opencode" ]; then
-        log_info "opencode installed successfully to \$HOME/bin/opencode"
+    if command -v opencode &>/dev/null; then
+        log_info "opencode installed successfully"
     else
         log_error "opencode installation failed"
         return 1
