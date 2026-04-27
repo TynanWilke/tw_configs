@@ -266,6 +266,7 @@ install_configs() {
     [ -f "$HOME/.tmux.conf" ] && cp "$HOME/.tmux.conf" "$backup_dir/"
     [ -f "$HOME/.config/nvim/init.lua" ] && cp "$HOME/.config/nvim/init.lua" "$backup_dir/"
     [ -f "$HOME/.config/opencode/opencode.json" ] && cp "$HOME/.config/opencode/opencode.json" "$backup_dir/"
+    [ -f "$HOME/.claude/settings.json" ] && cp "$HOME/.claude/settings.json" "$backup_dir/"
 
     if [ "$(ls -A $backup_dir)" ]; then
         log_info "Existing configs backed up to: $backup_dir"
@@ -364,6 +365,30 @@ fi\
         }
     fi
 
+    # Install opencode config
+    log_info "Installing opencode configuration..."
+    mkdir -p "$HOME/.config/opencode"
+    if [ "$USE_LOCAL" = true ]; then
+        cp "$SCRIPT_DIR/opencode/opencode.json" "$HOME/.config/opencode/opencode.json"
+    else
+        curl -fsSL "$GITHUB_RAW_URL/opencode/opencode.json" -o "$HOME/.config/opencode/opencode.json" || {
+            log_error "Failed to download opencode.json"
+            exit 1
+        }
+    fi
+
+    # Install claude config
+    log_info "Installing claude configuration..."
+    mkdir -p "$HOME/.claude"
+    if [ "$USE_LOCAL" = true ]; then
+        cp "$SCRIPT_DIR/claude/settings.json" "$HOME/.claude/settings.json"
+    else
+        curl -fsSL "$GITHUB_RAW_URL/claude/settings.json" -o "$HOME/.claude/settings.json" || {
+            log_error "Failed to download claude settings.json"
+            exit 1
+        }
+    fi
+
     # Install neovim config
     log_info "Installing neovim configuration..."
     mkdir -p "$HOME/.config/nvim"
@@ -413,24 +438,13 @@ install_opencode() {
         mkdir -p "$HOME/bin"
         cp "$temp_dir/opencode" "$HOME/bin/opencode" && chmod +x "$HOME/bin/opencode"
     elif [[ "$OSTYPE" == "darwin"* ]]; then
-        if [[ $(uname -m) == "arm64" ]]; then
-            local arch="arm64"
+        if command -v brew &>/dev/null; then
+            brew install opencode
         else
-            local arch="amd64"
+            log_error "Homebrew not found. Cannot install opencode on macOS without Homebrew."
+            rm -rf "$temp_dir"
+            return 1
         fi
-        local download_url="https://github.com/anomalyco/opencode/releases/latest/download/opencode-darwin-${arch}.tar.gz"
-        curl -L "$download_url" -o "$temp_dir/opencode.tar.gz" || {
-            log_error "Failed to download opencode"
-            rm -rf "$temp_dir"
-            return 1
-        }
-        tar -xzf "$temp_dir/opencode.tar.gz" -C "$temp_dir" || {
-            log_error "Failed to extract opencode"
-            rm -rf "$temp_dir"
-            return 1
-        }
-        mkdir -p "$HOME/bin"
-        cp "$temp_dir/opencode" "$HOME/bin/opencode" && chmod +x "$HOME/bin/opencode"
     else
         log_warn "Unsupported OS for automatic opencode installation. Install manually from https://github.com/anomalyco/opencode"
         rm -rf "$temp_dir"
@@ -443,6 +457,23 @@ install_opencode() {
         log_info "opencode installed successfully to \$HOME/bin/opencode"
     else
         log_error "opencode installation failed"
+        return 1
+    fi
+}
+
+install_claude() {
+    if command -v claude &>/dev/null; then
+        log_info "claude is already installed, skipping."
+        return 0
+    fi
+
+    log_info "Installing Claude CLI..."
+    curl -fsSL https://claude.ai/install.sh | bash
+
+    if command -v claude &>/dev/null; then
+        log_info "Claude CLI installed successfully"
+    else
+        log_error "Claude CLI installation failed"
         return 1
     fi
 }
@@ -541,6 +572,9 @@ main() {
     echo ""
 
     install_opencode
+    echo ""
+
+    install_claude
     echo ""
 
     install_configs
