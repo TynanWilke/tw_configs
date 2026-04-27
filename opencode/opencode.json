@@ -1,0 +1,29 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "boostrun": {
+      "name": "BoostRun",
+      "npm": "@ai-sdk/openai-compatible",
+      "api": "https://api.boostrun.me/v1",
+      "env": ["BOOSTRUN_API_KEY"],
+      "models": {
+        "zai-glm-5.1": {
+          "id": "zai.glm-5.1",
+          "tool_call": true,
+          "temperature": true,
+          "limit": {
+            "context": 200000,
+            "output": 65536
+          }
+        }
+      }
+    }
+  },
+  "model": "boostrun/zai-glm-5.1",
+  "small_model": "boostrun/zai-glm-5.1",
+  "enabled_providers": ["boostrun"],
+  "share": "disabled",
+  "snapshot": false,
+  "lsp": false,
+  "formatter": false
+}

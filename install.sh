@@ -5,6 +5,8 @@
 
 set -e  # Exit on error
 
+DOTFILES_USER="${DOTFILES_USER:-tw}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -24,7 +26,6 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Detect OS and distribution
 detect_os() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/os-release ]; then
@@ -264,6 +265,7 @@ install_configs() {
     [ -f "$HOME/.bashrc.tynan" ] && cp "$HOME/.bashrc.tynan" "$backup_dir/"
     [ -f "$HOME/.tmux.conf" ] && cp "$HOME/.tmux.conf" "$backup_dir/"
     [ -f "$HOME/.config/nvim/init.lua" ] && cp "$HOME/.config/nvim/init.lua" "$backup_dir/"
+    [ -f "$HOME/.config/opencode/opencode.json" ] && cp "$HOME/.config/opencode/opencode.json" "$backup_dir/"
 
     if [ "$(ls -A $backup_dir)" ]; then
         log_info "Existing configs backed up to: $backup_dir"
@@ -290,6 +292,10 @@ install_configs() {
 # This file is sourced by ~/.bashrc and should NOT be committed to version control
 # Add this file to your .gitignore if storing in a repository
 #
+# export BOOSTRUN_API_KEY=""
+# export ANTHROPIC_API_KEY=""
+# export OPENAI_API_KEY=""
+# export GITHUB_TOKEN=""
 EOF
         chmod 600 "$HOME/.bashrc.env"  # Restrict permissions to owner only
         log_info "Created ~/.bashrc.env (use this for API keys and secrets)"
@@ -376,12 +382,152 @@ fi\
     log_info "Configuration files installed successfully!"
 }
 
+install_opencode() {
+    if command -v opencode &>/dev/null; then
+        log_info "opencode is already installed."
+        return 0
+    fi
+
+    log_info "Installing opencode..."
+
+    local temp_dir="/tmp/opencode-install-$$"
+    mkdir -p "$temp_dir"
+
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if [[ $(uname -m) == "aarch64" || $(uname -m) == "arm64" ]]; then
+            local arch="arm64"
+        else
+            local arch="amd64"
+        fi
+        local download_url="https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-${arch}.tar.gz"
+        curl -L "$download_url" -o "$temp_dir/opencode.tar.gz" || {
+            log_error "Failed to download opencode"
+            rm -rf "$temp_dir"
+            return 1
+        }
+        tar -xzf "$temp_dir/opencode.tar.gz" -C "$temp_dir" || {
+            log_error "Failed to extract opencode"
+            rm -rf "$temp_dir"
+            return 1
+        }
+        mkdir -p "$HOME/bin"
+        cp "$temp_dir/opencode" "$HOME/bin/opencode" && chmod +x "$HOME/bin/opencode"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        if [[ $(uname -m) == "arm64" ]]; then
+            local arch="arm64"
+        else
+            local arch="amd64"
+        fi
+        local download_url="https://github.com/anomalyco/opencode/releases/latest/download/opencode-darwin-${arch}.tar.gz"
+        curl -L "$download_url" -o "$temp_dir/opencode.tar.gz" || {
+            log_error "Failed to download opencode"
+            rm -rf "$temp_dir"
+            return 1
+        }
+        tar -xzf "$temp_dir/opencode.tar.gz" -C "$temp_dir" || {
+            log_error "Failed to extract opencode"
+            rm -rf "$temp_dir"
+            return 1
+        }
+        mkdir -p "$HOME/bin"
+        cp "$temp_dir/opencode" "$HOME/bin/opencode" && chmod +x "$HOME/bin/opencode"
+    else
+        log_warn "Unsupported OS for automatic opencode installation. Install manually from https://github.com/anomalyco/opencode"
+        rm -rf "$temp_dir"
+        return 0
+    fi
+
+    rm -rf "$temp_dir"
+
+    if command -v opencode &>/dev/null || [ -x "$HOME/bin/opencode" ]; then
+        log_info "opencode installed successfully to \$HOME/bin/opencode"
+    else
+        log_error "opencode installation failed"
+        return 1
+    fi
+}
+
+# Prompt yes/no with a message; returns 0 for yes, 1 for no
+prompt_yes_no() {
+    local message="$1"
+    local response
+    while true; do
+        echo -ne "${YELLOW}[PROMPT]${NC} $message (y/n): "
+        read -r response
+        case "$response" in
+            [Yy]|[Yy][Ee][Ss]) return 0 ;;
+            [Nn]|[Nn][Oo]) return 1 ;;
+            *) echo "Please answer y or n." ;;
+        esac
+    done
+}
+
+# Create the configured user with group and optional passwordless sudo (Linux only)
+setup_user() {
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+        return 0
+    fi
+
+    if id "$DOTFILES_USER" &>/dev/null; then
+        log_info "User '$DOTFILES_USER' already exists, skipping user setup."
+        return 0
+    fi
+
+    if ! prompt_yes_no "User '$DOTFILES_USER' does not exist. Create user '$DOTFILES_USER' with group?"; then
+        log_info "Skipping user '$DOTFILES_USER' creation."
+        return 0
+    fi
+
+    if ! command -v useradd &>/dev/null && ! command -v adduser &>/dev/null; then
+        log_error "Neither useradd nor adduser found. Cannot create user."
+        return 1
+    fi
+
+    if command -v useradd &>/dev/null; then
+        sudo useradd -m -s /bin/bash "$DOTFILES_USER"
+    else
+        sudo adduser --disabled-password --gecos "" "$DOTFILES_USER"
+        sudo usermod -s /bin/bash "$DOTFILES_USER"
+    fi
+
+    local home_dir=$(eval echo "~$DOTFILES_USER")
+    if [ ! -d "$home_dir" ]; then
+        sudo mkdir -p "$home_dir"
+        sudo chown "$DOTFILES_USER:$DOTFILES_USER" "$home_dir"
+    fi
+
+    if id "$DOTFILES_USER" &>/dev/null; then
+        log_info "User '$DOTFILES_USER' created successfully."
+    else
+        log_error "Failed to create user '$DOTFILES_USER'."
+        return 1
+    fi
+
+    if prompt_yes_no "Set up passwordless sudo for user '$DOTFILES_USER'?"; then
+        local sudoers_file="/etc/sudoers.d/$DOTFILES_USER"
+        echo "$DOTFILES_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee "$sudoers_file" >/dev/null
+        sudo chmod 440 "$sudoers_file"
+        if sudo visudo -c -f "$sudoers_file" &>/dev/null; then
+            log_info "Passwordless sudo configured for '$DOTFILES_USER'."
+        else
+            log_error "Sudoers file validation failed, removing $sudoers_file"
+            sudo rm -f "$sudoers_file"
+            return 1
+        fi
+    else
+        log_info "Skipping passwordless sudo setup for '$DOTFILES_USER'."
+    fi
+}
+
 # Main installation process
 main() {
     log_info "Starting dotfiles installation..."
     echo ""
 
     detect_os
+    echo ""
+
+    setup_user
     echo ""
 
     if ! check_dependencies; then
@@ -392,6 +538,9 @@ main() {
 
     # Check and upgrade neovim if needed
     check_and_upgrade_neovim
+    echo ""
+
+    install_opencode
     echo ""
 
     install_configs
