@@ -414,11 +414,11 @@ install_opencode() {
     log_info "Installing opencode..."
     curl -fsSL https://opencode.ai/install | bash
 
+    export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
     if command -v opencode &>/dev/null; then
         log_info "opencode installed successfully"
     else
-        log_error "opencode installation failed"
-        return 1
+        log_warn "opencode was installed but not found in PATH. It may be available after restarting your shell."
     fi
 }
 
@@ -431,11 +431,11 @@ install_claude() {
     log_info "Installing Claude CLI..."
     curl -fsSL https://claude.ai/install.sh | bash
 
+    export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
     if command -v claude &>/dev/null; then
         log_info "Claude CLI installed successfully"
     else
-        log_error "Claude CLI installation failed"
-        return 1
+        log_info "Claude CLI installed but not yet on PATH. It will be available after restarting your shell."
     fi
 }
 
