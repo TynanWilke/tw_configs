@@ -484,7 +484,7 @@ prompt_yes_no() {
     local response
     while true; do
         echo -ne "${YELLOW}[PROMPT]${NC} $message (y/n): "
-        read -r response
+        read -r response < /dev/tty
         case "$response" in
             [Yy]|[Yy][Ee][Ss]) return 0 ;;
             [Nn]|[Nn][Oo]) return 1 ;;
