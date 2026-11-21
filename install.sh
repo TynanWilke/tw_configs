@@ -47,13 +47,13 @@ install_packages() {
     case "$OS" in
         ubuntu|debian)
             sudo apt-get update
-            sudo apt-get install -y tmux neovim curl
+            sudo apt-get install -y tmux neovim curl git
             ;;
         fedora|rhel|centos)
-            sudo dnf install -y tmux neovim curl
+            sudo dnf install -y tmux neovim curl git
             ;;
         arch|manjaro)
-            sudo pacman -Sy --noconfirm tmux neovim curl
+            sudo pacman -Sy --noconfirm tmux neovim curl git
             ;;
         macos)
             if ! command -v brew &> /dev/null; then
@@ -61,7 +61,7 @@ install_packages() {
                 log_warn "Skipping package installation..."
                 return
             fi
-            brew install tmux neovim curl
+            brew install tmux neovim curl git
             ;;
         *)
             log_warn "Unknown OS. Please install tmux and neovim manually."
@@ -84,6 +84,10 @@ check_dependencies() {
         missing+=("neovim")
     fi
 
+    if ! command -v git &> /dev/null; then
+        missing+=("git")
+    fi
+
     if [ ${#missing[@]} -eq 0 ]; then
         log_info "All dependencies are already installed."
         return 0
@@ -101,12 +105,14 @@ check_and_upgrade_neovim() {
     fi
 
     # Get neovim version (portable across Linux and macOS)
-    local nvim_version=$(nvim --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9]\+\.[0-9]\+\).*/\1/p')
+    local nvim_version
+    nvim_version=$(nvim --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9]\+\.[0-9]\+\).*/\1/p')
     if [ -z "$nvim_version" ]; then
         nvim_version="0.0"
     fi
-    local major=$(echo "$nvim_version" | cut -d. -f1)
-    local minor=$(echo "$nvim_version" | cut -d. -f2)
+    local major minor
+    major=$(echo "$nvim_version" | cut -d. -f1)
+    minor=$(echo "$nvim_version" | cut -d. -f2)
 
     log_info "Detected neovim version: $nvim_version"
 
@@ -193,8 +199,9 @@ install_neovim_from_release() {
         }
 
         # Determine the extracted directory name
-        local nvim_dir=$(ls -d "$temp_dir/nvim-macos-"* | head -n1)
-        local nvim_dirname=$(basename "$nvim_dir")
+        local nvim_dir nvim_dirname
+        nvim_dir=$(ls -d "$temp_dir/nvim-macos-"* | head -n1)
+        nvim_dirname=$(basename "$nvim_dir")
 
         # Install entire neovim directory to $HOME/.local/
         log_info "Installing neovim to \$HOME/.local/$nvim_dirname..."
@@ -224,7 +231,8 @@ install_neovim_from_release() {
 
     # Verify installation
     if "$HOME/bin/nvim" --version &> /dev/null; then
-        local new_version=$("$HOME/bin/nvim" --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+        local new_version
+        new_version=$("$HOME/bin/nvim" --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
         if [ -z "$new_version" ]; then
             new_version="unknown"
         fi
@@ -294,9 +302,9 @@ install_configs() {
 # export GITHUB_TOKEN=""
 EOF
         chmod 600 "$HOME/.bashrc.env"  # Restrict permissions to owner only
-        log_info "Created ~/.bashrc.env (use this for API keys and secrets)"
+        log_info "Created \$HOME/.bashrc.env (use this for API keys and secrets)"
     else
-        log_info "~/.bashrc.env already exists, skipping creation"
+        log_info "\$HOME/.bashrc.env already exists, skipping creation"
     fi
 
     # Add sourcing to .bashrc if not already present
@@ -396,8 +404,8 @@ fi\
         }
     fi
 
-    # Create neovim undo directory
-    mkdir -p "$HOME/.config/nvim/undo"
+    # Create neovim undo/backup directories
+    mkdir -p "$HOME/.config/nvim/undodir" "$HOME/.vim-tmp" "$HOME/.tmp"
 
     log_info "Configuration files installed successfully!"
 }
@@ -434,6 +442,41 @@ install_claude() {
     fi
 }
 
+# Install Tmux Plugin Manager and its plugins
+install_tpm() {
+    log_info "Setting up Tmux Plugin Manager (TPM)..."
+
+    local tpm_dir="$HOME/.tmux/plugins/tpm"
+
+    if [ ! -d "$tpm_dir" ]; then
+        if ! command -v git &> /dev/null; then
+            log_error "git is required to install TPM"
+            return 1
+        fi
+        log_info "Cloning TPM into $tpm_dir..."
+        mkdir -p "$HOME/.tmux/plugins"
+        git clone --depth 1 https://github.com/tmux-plugins/tpm "$tpm_dir" || {
+            log_error "Failed to clone TPM"
+            return 1
+        }
+    else
+        log_info "TPM already installed at $tpm_dir"
+    fi
+
+    # Source the config so the tmux server sets TMUX_PLUGIN_MANAGER_PATH,
+    # which install_plugins requires.
+    if command -v tmux &> /dev/null; then
+        tmux source-file "$HOME/.tmux.conf" >/dev/null 2>&1 || true
+    fi
+
+    if [ -x "$tpm_dir/bin/install_plugins" ]; then
+        log_info "Installing tmux plugins..."
+        "$tpm_dir/bin/install_plugins" || log_warn "TPM plugin installation failed; start tmux and press prefix + I"
+    else
+        log_warn "TPM install_plugins script not found; start tmux and press prefix + I"
+    fi
+}
+
 # Main installation process
 main() {
     export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
@@ -460,6 +503,9 @@ main() {
     echo ""
 
     install_configs
+    echo ""
+
+    install_tpm || log_warn "TPM setup failed; install it manually and press prefix + I in tmux."
     echo ""
 
     log_info "Installation complete!"

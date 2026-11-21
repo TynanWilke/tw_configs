@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Bash history
 shopt -s histappend
 shopt -s histreedit
@@ -35,7 +36,8 @@ get_hostname_emoji() {
   )
 
   # Get hostname
-  local hostname=$(hostname)
+  local hostname
+  hostname=$(hostname)
 
   # Hash the hostname using md5sum or md5 (cross-platform)
   local hash

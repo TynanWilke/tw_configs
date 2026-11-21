@@ -27,12 +27,21 @@ vim.opt.wildignore = "*.swp,*.bak,*.pyc,*.pyo,*.class"
 vim.opt.errorbells = false
 vim.opt.timeoutlen = 1000
 vim.opt.ttimeoutlen = 0
-vim.opt.autochdir = true
 vim.opt.autoread = true
 vim.opt.hlsearch = true
 vim.opt.clipboard = "unnamedplus"     -- using system clipboard
 vim.opt.lazyredraw = true
 vim.opt.ttyfast = true                -- Speed up scrolling in Vim
+
+-- Ensure Neovim's undo/backup/swap directories exist
+for _, dir in ipairs({
+  vim.fn.expand("~/.config/nvim/undodir"),
+  vim.fn.expand("~/.vim-tmp"),
+  vim.fn.expand("~/.tmp"),
+}) do
+  vim.fn.mkdir(dir, "p")
+end
+
 vim.opt.backupdir = "~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp"
 vim.opt.directory = "~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp"
 vim.opt.mouse = ""                   -- disable mouse
@@ -97,7 +106,7 @@ vim.cmd("filetype plugin indent on")  -- allow auto-indenting depending on file 
 -- Plugins
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
+if not vim.uv.fs_stat(lazypath) then
   vim.fn.system({
     "git",
     "clone",
@@ -177,83 +186,6 @@ require("lazy").setup({
     },
   },
   
-  -- Avante.nvim for AI chat with Claude
-  {
-    "yetone/avante.nvim",
-    event = "VeryLazy",
-    lazy = false,
-    version = false,
-    opts = {
-      provider = "claude",
-      providers = {
-        claude = {
-          endpoint = "https://api.anthropic.com",
-          model = "claude-sonnet-4-20250514",
-          temperature = 0,
-          extra_request_body = {
-            max_tokens = 4096,
-          },
-        },
-      },
-      mappings = {
-        ask = "<leader>aa",
-        edit = "<leader>ae",
-        refresh = "<leader>ar",
-        diff = {
-          ours = "co",
-          theirs = "ct",
-          all_theirs = "ca",
-          both = "cb",
-          cursor = "cc",
-          next = "]x",
-          prev = "[x",
-        },
-        suggestion = {
-          accept = "<M-l>",
-          next = "<M-]>",
-          prev = "<M-[>",
-          dismiss = "<C-]>",
-        },
-        jump = {
-          next = "]]",
-          prev = "[[",
-        },
-        submit = {
-          normal = "<CR>",
-          insert = "<C-s>",
-        },
-      },
-    },
-    build = "make",
-    dependencies = {
-      "nvim-treesitter/nvim-treesitter",
-      "stevearc/dressing.nvim",
-      "nvim-lua/plenary.nvim",
-      "MunifTanjim/nui.nvim",
-      "nvim-tree/nvim-web-devicons",
-      {
-        "HakonHarnes/img-clip.nvim",
-        event = "VeryLazy",
-        opts = {
-          default = {
-            embed_image_as_base64 = false,
-            prompt_for_file_name = false,
-            drag_and_drop = {
-              insert_mode = true,
-            },
-          },
-        },
-      },
-      {
-        "MeanderingProgrammer/render-markdown.nvim",
-        opts = {
-          file_types = { "markdown", "Avante" },
-        },
-        ft = { "markdown", "Avante" },
-      },
-    },
-  },
-  
   -- nvim-cmp for completion
   { 
     "hrsh7th/nvim-cmp",
@@ -287,13 +219,7 @@ require("lazy").setup({
     end
   },
   
-  -- Git integration
-  {
-    "mhinz/vim-signify",
-    config = function()
-    end
-  },
-
+  -- Git integration (gitgutter only; signify would duplicate the signs)
   {
     "airblade/vim-gitgutter",
     config = function()
@@ -335,6 +261,7 @@ require("lazy").setup({
   -- Syntax highlighting
   { 
     "nvim-treesitter/nvim-treesitter",
+    branch = "master", -- the configs API below only exists on master
     build = ":TSUpdate",
     config = function()
       require('nvim-treesitter.configs').setup {
@@ -359,14 +286,10 @@ require("lazy").setup({
   -- Prettier code formatting
   { 
     "prettier/vim-prettier",
-    build = "yarn install",
+    build = "npm install",
     ft = {"javascript", "typescript", "css", "json", "yaml", "html"}
   },
 
-  -- Additional dependencies for Avante
-  { "stevearc/dressing.nvim" },
-  { "nvim-lua/plenary.nvim" },
-  { "MunifTanjim/nui.nvim" },
 })
 
 -- Post Plugin Configuration
@@ -401,51 +324,55 @@ vim.cmd([[
 ]])
 
 -- Automatically create C++ header guards
-vim.cmd([[
-  function! s:insert_gates()
-    let gatename = substitute(toupper(expand("%:t")), "\\.", "_", "g")
-    execute "normal! i#ifndef " . gatename
-    execute "normal! o#define " . gatename . " "
-    execute "normal! i\n"
-    execute "normal! i\n"
-    execute "normal! i\n"
-    execute "normal! Go#endif /* " . gatename . " */"
-    normal! kk
-  endfunction
-  autocmd BufNewFile *.{h,hpp} call <SID>insert_gates()
-]])
+vim.api.nvim_create_autocmd("BufNewFile", {
+  pattern = { "*.h", "*.hpp" },
+  callback = function()
+    local name = vim.fn.expand("%:t"):upper():gsub("%.", "_")
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+      "#ifndef " .. name,
+      "#define " .. name,
+      "",
+      "",
+      "",
+      "#endif /* " .. name .. " */",
+    })
+    vim.api.nvim_win_set_cursor(0, { 4, 0 })
+  end,
+})
 
 -- Bash script template
-vim.cmd([[
-  function! s:insert_bash()
-    execute "normal! i#!/usr/bin/env bash\n"
-    execute "normal! i\n"
-    execute "normal! iset -o errexit\n"
-    execute "normal! iset -o nounset\n"
-    execute "normal! iset -o pipefail\n"
-    execute "normal! iif \[\[ \"${TRACE-0}\" == "1\" \]\]; then\n"
-    execute "normal! i	set -o xtrace\n"
-    execute "normal! ifi\n"
-    execute "normal! i\n"
-    execute "normal! iif \[\[ \"${1-}i\" =~ ^-*h(elp)?$ \]\]\; then\n"
-    execute "normal! i	echo 'Usage: ./script.sh arg-one arg-two\n"
-    execute "normal! i\n"
-    execute "normal! iThis is an awesome bash script to make your life better.\n"
-    execute "normal! i\n"
-    execute "normal! i'\n"
-    execute "normal! i	exit\n"
-    execute "normal! ifi\n"
-    execute "normal! i\n"
-    execute "normal! icd \"$(dirname \"$0\")\"\n"
-    execute "normal! i\n"
-    execute "normal! imain() {\n"
-    execute "normal! i	echo do awesome stuff\n"
-    execute "normal! i}\n"
-    execute "normal! i\n"
-    execute "normal! imain \"$@\"\n"
-  endfunction
-  autocmd BufNewFile *.{sh} call <SID>insert_bash()
-]])
+vim.api.nvim_create_autocmd("BufNewFile", {
+  pattern = "*.sh",
+  callback = function()
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+      "#!/usr/bin/env bash",
+      "",
+      "set -o errexit",
+      "set -o nounset",
+      "set -o pipefail",
+      "",
+      'if [[ "${TRACE-0}" == "1" ]]; then',
+      "    set -o xtrace",
+      "fi",
+      "",
+      'if [[ "${1-}" =~ ^-*h(elp)?$ ]]; then',
+      "    echo 'Usage: ./script.sh arg-one arg-two'",
+      "    echo",
+      "    echo 'This is an awesome bash script to make your life better.'",
+      "    echo",
+      "    exit",
+      "fi",
+      "",
+      'cd "$(dirname "$0")"',
+      "",
+      "main() {",
+      "    echo do awesome stuff",
+      "}",
+      "",
+      'main "$@"',
+    })
+  end,
+})
 
 -- SCons syntax highlighting
 vim.cmd([[
@@ -468,7 +395,7 @@ vim.keymap.set('v', '<F1>', '<Esc>', { noremap = true })
 vim.keymap.set('c', '<F1>', '<Esc>', { noremap = true })
 
 -- Quick find
-vim.keymap.set('n', '<F3>', ':find ', { noremap = true })
+vim.keymap.set('n', '<F4>', ':find ', { noremap = true })
 
 -- Autocommands for whitespace cleanup
 vim.cmd([[
@@ -476,17 +403,17 @@ vim.cmd([[
     autocmd!
     autocmd BufWritePre *.py :%s/\s\+$//e
   augroup END
-
-  augroup TrimTrailingNewlines
-    autocmd!
-    autocmd BufWritePre *.py silent! %s/\n\+\%$//e
-  augroup END
 ]])
 
--- Set the working directory to the directory of the current file
-vim.cmd([[
-  autocmd BufEnter * lcd %:p:h
-]])
+-- Set the window-local working directory to the current file's directory
+vim.api.nvim_create_autocmd("BufEnter", {
+  callback = function()
+    local dir = vim.fn.expand("%:p:h")
+    if dir ~= "" then
+      vim.cmd("lcd " .. vim.fn.fnameescape(dir))
+    end
+  end,
+})
 
 -- Enhanced visual styling to coordinate with tmux
 vim.cmd([[

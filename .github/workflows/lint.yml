@@ -1,0 +1,80 @@
+name: Lint
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Bash syntax
+        run: |
+          bash -n install.sh
+          bash -n setup_user.sh
+          bash -n bash/.bashrc.tynan
+
+      - name: ShellCheck
+        run: shellcheck --severity=warning install.sh setup_user.sh bash/.bashrc.tynan
+
+  lua:
+    name: Lua syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Lua
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+
+      - name: Syntax check
+        run: luac5.1 -p nvim/init.lua
+
+  json:
+    name: JSON
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate JSON
+        run: |
+          jq empty claude/settings.json
+          jq empty opencode/opencode.json
+
+  workflows:
+    name: GitHub Actions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: actionlint
+        uses: raven-actions/actionlint@v2
+
+  tmux:
+    name: tmux config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - name: Validate tmux config
+        run: |
+          # Stub TPM so the `run '~/.tmux/plugins/tpm/tpm'` line doesn't fail.
+          mkdir -p "$HOME/.tmux/plugins/tpm"
+          touch "$HOME/.tmux/plugins/tpm/tpm"
+          tmux -f tmux/.tmux.conf -L lint new-session -d
+          tmux -L lint kill-server
